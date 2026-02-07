@@ -20,7 +20,9 @@
 #include <chrono>
 #include <vector>
 #include <cstdlib>
-#include <ctime> 
+#include <ctime>
+#include <cmath>
+#include <string>
 
 using namespace std;
 
@@ -28,11 +30,89 @@ using chrono::nanoseconds;
 using chrono::duration_cast;
 using chrono::high_resolution_clock;
 
+void no_thread_matrix(vector<vector<int>> &matrix, int matrix_size)
+{
+    matrix.resize(matrix_size);
+
+    for (int i = 0; i < matrix_size; i++)
+    {
+        matrix[i].resize(matrix_size);
+
+        for (int j = 0; j < matrix_size; j++)
+        {
+            matrix[i][j] = rand() % 10;
+        }
+    }
+}
+
+void no_thread_edited_matrix(vector<vector<int>>& matrix, vector<vector<int>*>& edited_matrix, int matrix_size)
+{
+    edited_matrix.resize(matrix_size);
+
+    int middle = (int)round(matrix_size / 2);
+    int j = (matrix_size % 2 == 1) ? 0 : 1;
+
+    for (int i = 0; i < matrix_size; i++)
+    {
+        edited_matrix[i] = &matrix[(i > middle - j) ? matrix_size - i - 1 : i];
+    }
+}
+
 int main()
 {
     srand(time(0));
 
-    cout << "Hello World!\n";
+    vector<vector<int>> matrix;
+    int matrix_size = 10000;
+
+    bool isOdd = matrix_size % 2 == 1;
+    int middle = (int)round(matrix_size / 2);
+    string repeated_symbol(matrix_size * 2 - 1, '-');
+
+    auto creation_begin = high_resolution_clock::now();
+    no_thread_matrix(matrix, matrix_size);
+    auto creation_end = high_resolution_clock::now();
+    auto no_thread_task_time = duration_cast<nanoseconds>(creation_end - creation_begin);
+
+    for (int i = 0; i < matrix_size; i++)
+    {
+        if (i == middle) cout << repeated_symbol << endl;
+
+        for (int j = 0; j < matrix_size; j++)
+        {
+            cout << matrix[i][j];
+            if (j != matrix_size - 1) cout << " ";
+        }
+
+        cout << endl;
+        if (i == middle && isOdd) cout << repeated_symbol << endl;
+    }
+
+    vector<vector<int>*> edited_matrix;
+
+    creation_begin = high_resolution_clock::now();
+    no_thread_edited_matrix(matrix, edited_matrix, matrix_size);
+    creation_end = high_resolution_clock::now();
+    no_thread_task_time += duration_cast<nanoseconds>(creation_end - creation_begin);
+
+    cout << "\n<-- Mirrored matrix -->\n\n";
+    for (size_t i = 0; i < edited_matrix.size(); ++i)
+    {
+        vector<int>* row_ptr = edited_matrix[i];
+
+        if (i == middle) cout << repeated_symbol << endl;
+
+        for (size_t j = 0; j < row_ptr->size(); ++j)
+        {
+            cout << (*row_ptr)[j];
+            if (j != matrix_size - 1) cout << " ";
+        }
+
+        cout << endl;
+        if (i == middle && isOdd) cout << repeated_symbol << endl;
+    }
+
+    cout << "\nTime: " << no_thread_task_time.count() * 1e-9;
 
     return 0;
 }
