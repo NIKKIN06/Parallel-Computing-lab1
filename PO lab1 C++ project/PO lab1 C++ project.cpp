@@ -19,19 +19,20 @@
 #include <thread>
 #include <chrono>
 #include <vector>
-#include <cstdlib>
-#include <ctime>
-#include <cmath>
 #include <string>
+#include <random>
 
 using namespace std;
 
-using chrono::nanoseconds;
-using chrono::duration_cast;
-using chrono::high_resolution_clock;
+using std::chrono::nanoseconds;
+using std::chrono::duration_cast;
+using std::chrono::high_resolution_clock;
 
 void no_thread_matrix(vector<vector<int>> &matrix, int matrix_size)
 {
+    std::mt19937 gen(std::random_device{}());
+    std::uniform_int_distribution<> dist(0, 9);
+    
     matrix.resize(matrix_size);
 
     for (int i = 0; i < matrix_size; i++)
@@ -40,7 +41,7 @@ void no_thread_matrix(vector<vector<int>> &matrix, int matrix_size)
 
         for (int j = 0; j < matrix_size; j++)
         {
-            matrix[i][j] = rand() % 10;
+            matrix[i][j] = dist(gen);
         }
     }
 }
@@ -49,31 +50,44 @@ void no_thread_edited_matrix(vector<vector<int>>& matrix, vector<vector<int>*>& 
 {
     edited_matrix.resize(matrix_size);
 
-    int middle = (int)round(matrix_size / 2);
-    int j = (matrix_size % 2 == 1) ? 0 : 1;
+    int middle = matrix_size / 2;
+    int j = (matrix_size % 2 == 1) ? 1 : 0;
 
     for (int i = 0; i < matrix_size; i++)
     {
-        edited_matrix[i] = &matrix[(i > middle - j) ? matrix_size - i - 1 : i];
+        edited_matrix[i] = &matrix[(i < middle + j) ? i : matrix_size - i - 1];
     }
 }
 
-int main()
+void thread_function(vector<vector<int>>& matrix, vector<vector<int>*>& mirrored_matrix, int matrix_size, int rows_amount, int start_row_index)
 {
-    srand(time(0));
+    int middle = matrix_size / 2;
+    int odd_addition = (matrix_size % 2 == 1) ? 1 : 0;
 
-    vector<vector<int>> matrix;
-    int matrix_size = 10000;
+    thread_local std::mt19937 gen(std::random_device{}());
+    std::uniform_int_distribution<> dist(0, 9);
+    
+    for (int rows = start_row_index; rows < start_row_index + rows_amount; rows++)
+    {
+        matrix[rows].resize(matrix_size);
 
-    bool isOdd = matrix_size % 2 == 1;
-    int middle = (int)round(matrix_size / 2);
+        for (int j = 0; j < matrix_size; j++)
+        {
+            matrix[rows][j] = dist(gen);
+        }
+
+        if (rows < middle + odd_addition)
+        {
+            mirrored_matrix[rows] = &matrix[rows];
+            mirrored_matrix[matrix_size - rows - 1] = &matrix[rows];
+        }
+    }
+}
+
+void print_matrixes(vector<vector<int>>& matrix, vector<vector<int>*>& mirrored_matrix, int matrix_size, int middle, bool isOdd)
+{
     string repeated_symbol(matrix_size * 2 - 1, '-');
-
-    auto creation_begin = high_resolution_clock::now();
-    no_thread_matrix(matrix, matrix_size);
-    auto creation_end = high_resolution_clock::now();
-    auto no_thread_task_time = duration_cast<nanoseconds>(creation_end - creation_begin);
-
+    
     for (int i = 0; i < matrix_size; i++)
     {
         if (i == middle) cout << repeated_symbol << endl;
@@ -88,17 +102,10 @@ int main()
         if (i == middle && isOdd) cout << repeated_symbol << endl;
     }
 
-    vector<vector<int>*> edited_matrix;
-
-    creation_begin = high_resolution_clock::now();
-    no_thread_edited_matrix(matrix, edited_matrix, matrix_size);
-    creation_end = high_resolution_clock::now();
-    no_thread_task_time += duration_cast<nanoseconds>(creation_end - creation_begin);
-
     cout << "\n<-- Mirrored matrix -->\n\n";
-    for (size_t i = 0; i < edited_matrix.size(); ++i)
+    for (size_t i = 0; i < matrix_size; ++i)
     {
-        vector<int>* row_ptr = edited_matrix[i];
+        vector<int>* row_ptr = mirrored_matrix[i];
 
         if (i == middle) cout << repeated_symbol << endl;
 
@@ -111,8 +118,73 @@ int main()
         cout << endl;
         if (i == middle && isOdd) cout << repeated_symbol << endl;
     }
+}
+
+int main()
+{
+    vector<vector<int>> matrix;
+    int matrix_size = 10000;
+
+    bool isOdd = matrix_size % 2 == 1;
+    int middle = matrix_size / 2;
+
+    auto creation_begin = high_resolution_clock::now();
+    no_thread_matrix(matrix, matrix_size);
+    auto creation_end = high_resolution_clock::now();
+    auto no_thread_task_time = duration_cast<nanoseconds>(creation_end - creation_begin);
+
+    vector<vector<int>*> edited_matrix;
+
+    creation_begin = high_resolution_clock::now();
+    no_thread_edited_matrix(matrix, edited_matrix, matrix_size);
+    creation_end = high_resolution_clock::now();
+    no_thread_task_time += duration_cast<nanoseconds>(creation_end - creation_begin);
+
+    if(matrix_size < 20) print_matrixes(matrix, edited_matrix, matrix_size, middle, isOdd);
 
     cout << "\nTime: " << no_thread_task_time.count() * 1e-9;
+    cout << "\n\n-------------------------------------------------------------\n\n";
+
+    // ------------------------------------------
+
+    vector<vector<int>> thread_matrix;
+    thread_matrix.resize(matrix_size);
+
+    vector<vector<int>*> mirrored_thread_matrix;
+    mirrored_thread_matrix.resize(matrix_size);
+
+    vector<std::thread> threads;
+
+    int thread_amount = 192, start_row_index = 0;
+    int rows_per_thread = matrix_size / thread_amount;
+    int rows_remainder = matrix_size % thread_amount;
+
+    creation_begin = high_resolution_clock::now();
+    for (int thread_id = 0; thread_id < thread_amount; thread_id++)
+    {
+        int remainder = (rows_remainder > 0) ? 1 : 0;
+        int rows_amount = rows_per_thread + remainder;
+        
+        threads.emplace_back(thread_function, std::ref(thread_matrix), std::ref(mirrored_thread_matrix), matrix_size, rows_amount, start_row_index);
+
+        start_row_index += rows_amount;
+        
+        if(rows_remainder > 0) rows_remainder--;
+    }
+
+    for (auto& thread : threads)
+    {
+        if (thread.joinable())
+        {
+            thread.join();
+        }
+    }
+    creation_end = high_resolution_clock::now();
+    auto thread_task_time = duration_cast<nanoseconds>(creation_end - creation_begin);
+
+    if (matrix_size < 20) print_matrixes(matrix, edited_matrix, matrix_size, middle, isOdd);
+
+    cout << "\nTime: " << thread_task_time.count() * 1e-9;
 
     return 0;
 }
