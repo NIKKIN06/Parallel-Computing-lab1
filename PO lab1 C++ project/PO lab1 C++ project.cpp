@@ -120,30 +120,32 @@ void print_matrixes(vector<vector<int>>& matrix, vector<vector<int>*>& mirrored_
     }
 }
 
-int main()
+int main(int argc, char* argv[])
 {
+    if (argc < 3)
+    {
+        cerr << "Usage: " << argv[0] << " <matrix_size> <thread_amount>" << endl;
+        return 1;
+    }
+
+    int matrix_size = stoi(argv[1]);
+    int thread_amount = stoi(argv[2]);
+
     vector<vector<int>> matrix;
-    int matrix_size = 10000;
+    vector<vector<int>*> edited_matrix;
 
     bool isOdd = matrix_size % 2 == 1;
     int middle = matrix_size / 2;
 
-    auto creation_begin = high_resolution_clock::now();
+    auto clock_begin = high_resolution_clock::now();
+
     no_thread_matrix(matrix, matrix_size);
-    auto creation_end = high_resolution_clock::now();
-    auto no_thread_task_time = duration_cast<nanoseconds>(creation_end - creation_begin);
-
-    vector<vector<int>*> edited_matrix;
-
-    creation_begin = high_resolution_clock::now();
     no_thread_edited_matrix(matrix, edited_matrix, matrix_size);
-    creation_end = high_resolution_clock::now();
-    no_thread_task_time += duration_cast<nanoseconds>(creation_end - creation_begin);
 
-    if(matrix_size < 20) print_matrixes(matrix, edited_matrix, matrix_size, middle, isOdd);
+    auto clock_end = high_resolution_clock::now();
+    auto no_thread_task_time = duration_cast<nanoseconds>(clock_end - clock_begin);
 
-    cout << "\nTime: " << no_thread_task_time.count() * 1e-9;
-    cout << "\n\n-------------------------------------------------------------\n\n";
+    // if(matrix_size < 20) print_matrixes(matrix, edited_matrix, matrix_size, middle, isOdd);
 
     // ------------------------------------------
 
@@ -155,11 +157,11 @@ int main()
 
     vector<std::thread> threads;
 
-    int thread_amount = 192, start_row_index = 0;
+    int start_row_index = 0;
     int rows_per_thread = matrix_size / thread_amount;
     int rows_remainder = matrix_size % thread_amount;
 
-    creation_begin = high_resolution_clock::now();
+    clock_begin = high_resolution_clock::now();
     for (int thread_id = 0; thread_id < thread_amount; thread_id++)
     {
         int remainder = (rows_remainder > 0) ? 1 : 0;
@@ -179,12 +181,14 @@ int main()
             thread.join();
         }
     }
-    creation_end = high_resolution_clock::now();
-    auto thread_task_time = duration_cast<nanoseconds>(creation_end - creation_begin);
+    clock_end = high_resolution_clock::now();
+    auto thread_task_time = duration_cast<nanoseconds>(clock_end - clock_begin);
 
-    if (matrix_size < 20) print_matrixes(matrix, edited_matrix, matrix_size, middle, isOdd);
+    // if (matrix_size < 20) print_matrixes(matrix, edited_matrix, matrix_size, middle, isOdd);
 
-    cout << "\nTime: " << thread_task_time.count() * 1e-9;
+    // showing results of time execution
+    cout << no_thread_task_time.count() * 1e-9 << endl;
+    cout << thread_task_time.count() * 1e-9 << endl;
 
     return 0;
 }

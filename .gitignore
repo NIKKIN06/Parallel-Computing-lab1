@@ -416,3 +416,10 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Python virtual environment
+.venv/
+venv/
+
+# JetBrains IDE configuration
+.idea/
